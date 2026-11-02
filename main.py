@@ -1,10 +1,10 @@
-"""Zestaw 4, zad. 1 i 2: losowy digraf G(n, p) i silnie spójne składowe (Kosaraju)."""
-
 import argparse
 import sys
 
 from digraph import Digraph, random_digraph
 from kosaraju import components, kosaraju
+from generator import random_strongly_connected, random_weights
+from bellman_ford import bellman_ford, path_to, INF
 
 
 def parse_args():
@@ -13,6 +13,8 @@ def parse_args():
     )
     ap.add_argument("-n", type=int, help="liczba wierzchołków")
     ap.add_argument("-p", type=float, help="prawdopodobieństwo istnienia łuku, 0..1")
+    ap.add_argument("-s", type=int, default=1,
+                    help="wierzchołek źródłowy dla Bellmana-Forda (domyślnie 1)")
     ap.add_argument("--input", metavar="PLIK",
                     help="wczytaj graf z pliku w formacie listy sąsiedztwa")
     ap.add_argument("--format", choices=["list", "matrix", "incidence", "all"], default="list",
@@ -46,6 +48,14 @@ def print_times(d, f):
     print()
 
 
+def print_weighted(g, weights):
+    print("Lista sąsiedztwa z wagami (v: u(w) ...):")
+    for v in range(1, g.n + 1):
+        nbrs = " ".join(f"{u}({weights[(v, u)]})" for u in sorted(g.adj_list[v]))
+        print(f"  {v}.  {nbrs}")
+    print()
+
+
 def main():
     args = parse_args()
 
@@ -69,6 +79,38 @@ def main():
         print(f"  {i}: " + " ".join(map(str, group)))
     print()
     print("Graf jest silnie spójny" if len(groups) == 1 else "Graf nie jest silnie spójny")
+
+    if args.n is None or args.p is None:
+        return  
+    if not 1 <= args.s <= args.n:
+        print(f"\nPomijam zad. 3: -s musi należeć do 1..{args.n}")
+        return
+
+    print("\n" + "=" * 50)
+    print("losowy silnie spójny digraf z wagami + Bellman-Ford")
+    print("=" * 50 + "\n")
+
+    gs, attempts = random_strongly_connected(args.n, args.p)
+    print(f"Digraf silnie spójny: n = {gs.n}, liczba łuków = {len(gs.edges())} "
+          f"(wylosowano w {attempts} próbach)\n")
+
+    weights = random_weights(gs)
+    print_weighted(gs, weights)
+
+    dist, pred, cycle = bellman_ford(gs, weights, args.s)
+    if cycle is not None:
+        total = sum(weights[(cycle[i], cycle[i + 1])] for i in range(len(cycle) - 1))
+        print("Wykryto ujemny cykl osiągalny ze źródła – najkrótsze ścieżki nie istnieją.")
+        print("Cykl: " + " -> ".join(map(str, cycle)) + f"  (waga = {total})")
+        return
+
+    print(f"Najkrótsze ścieżki ze źródła s = {args.s}:")
+    for v in range(1, gs.n + 1):
+        if dist[v] == INF:
+            print(f"  {args.s} -> {v}: brak ścieżki")
+        else:
+            path = " -> ".join(map(str, path_to(pred, args.s, v)))
+            print(f"  {args.s} -> {v}: d = {dist[v]:>4},  ścieżka: {path}")
 
 
 if __name__ == "__main__":
